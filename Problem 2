@@ -31,15 +31,19 @@ gamma = 0.4
 def SIR_equations(y, t, beta, gamma, interaction_matrix):
     value_matrix = np.array(y.reshape(2,3))
     N_vector = value_matrix @ np.array([[1], [1], [1]])
-    lapda_vector_prep = np.array([value_matrix[:,1]]) @ interaction_matrix.T
-    lapda = ((beta / N_vector) * lapda_vector_prep.T).T
+    beta_N = beta / N_vector
+    first_matrix = np.identity(2) * beta_N
+    infecteds = np.array([value_matrix[:,1]]).T
+    susceptebles = np.array([value_matrix[:,0]]).T  
     
-    dS = - lapda * value_matrix[:,0]    
-    dI = lapda * value_matrix[:,0] - gamma * lapda * value_matrix[:,1]
-    dR = gamma * lapda * value_matrix[:,1]
+    lapda = first_matrix @ (interaction_matrix @ infecteds)
+
+    dS = - lapda * susceptebles   
+    dI = lapda * susceptebles - gamma * infecteds
+    dR = gamma * infecteds
 
     
-    changes = np.array([dS[0], dI[0], dR[0]]).T
+    changes = np.array([dS.T[0], dI.T[0], dR.T[0]]).T
     final_values = changes.reshape(1,6)
 
     return final_values[0]
