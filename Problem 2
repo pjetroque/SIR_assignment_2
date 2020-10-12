@@ -2,41 +2,44 @@ import numpy as np
 from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 
-# Define starting conditions
-S0 = 0.99
-I0 = 0.01
-R0 = 1-S0-I0
-days = 30
-dt = 0.01
+# Define starting conditions for each population, starting with 3 populations and only population 1 has infection
+
+N1 = 100
+S1 = 99
+I1 = N1 - S1
+R1 = 0
+
+N2 = 100
+S2 = 100
+I2 = N2 - S2
+R2 = 0
+
+
+value_matrix = np.array([S1, I1, R1, S2, I2, R2])
+
+interaction_matrix = np.array([[1, 0.6], [0.01, 1]])
+
+days = 10
+dt = 0.1
 steps = round(days / dt)
 
 # Define values for beta and gamma
-beta = 1
+beta = 1.6
 gamma = 0.4
 
 # Define differential equations
-def SIR_equations(y, t, beta, gamma):
-    S, I, R = y
-    dS = -beta * S * I
-    dI = (beta * S - gamma) * I
-    dR = gamma * I
-    return dS, dI, dR
+def SIR_equations(y, t, beta, gamma, interaction_matrix):
+    value_matrix = np.array(y.reshape(2,3))
+    N_vector = value_matrix @ np.array([[1], [1], [1]])
+    lapda_vector_prep = np.array([value_matrix[:,1]]) @ interaction_matrix.T
+    lapda = ((beta / N_vector) * lapda_vector_prep.T).T
+    
+    dS = - lapda * value_matrix[:,0]    
+    dI = lapda * value_matrix[:,0] - gamma * lapda * value_matrix[:,1]
+    dR = gamma * lapda * value_matrix[:,1]
 
-# Time vector, for the plot
-t = np.linspace(0,days,steps)
+    
+    changes = np.array([dS[0], dI[0], dR[0]]).T
+    final_values = changes.reshape(1,6)
 
-# Find solution
-final = odeint(SIR_equations, [S0, I0, R0], t, args=(beta, gamma))
-S, I, R = np.transpose(final)
-
-# Plot the distribution
-plt.title('For β= '+str(beta)+' and γ = '+str(gamma))
-plt.plot(t, S, label='Susceptible')
-plt.plot(t, I, label='Infected')
-plt.plot(t, R, label='Recovered')
-plt.ylim(0, 1)
-plt.xlim(0, days)
-plt.ylabel('Fraction of people')
-plt.xlabel('Amount of days')
-plt.legend()
-plt.show()
+    return final_values[0]
