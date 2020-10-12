@@ -43,3 +43,29 @@ def SIR_equations(y, t, beta, gamma, interaction_matrix):
     final_values = changes.reshape(1,6)
 
     return final_values[0]
+
+
+# Time vector, for the plot
+t = np.linspace(0,days,steps)
+
+start_parameters = value_matrix
+
+# Find solution
+final = odeint(SIR_equations, start_parameters, t, args=(beta, gamma, interaction_matrix))
+
+S1, I1, R1, S2, I2, R2 = final.T
+
+# Plot the distribution
+plt.title('For β= '+str(beta)+' and γ = '+str(gamma))
+plt.plot(t, I1, label='Infected P1')
+plt.plot(t, I2, label='Infected P2')
+plt.plot(t, S1, label='S P1')
+plt.plot(t, S2, label='S P2')
+plt.plot(t, R1, label='R P1')
+plt.plot(t, R2, label='R P2')
+plt.ylim(0, 100)
+plt.xlim(0, days)
+plt.ylabel('Fraction of people')
+plt.xlabel('Amount of days')
+plt.legend()
+plt.show()
