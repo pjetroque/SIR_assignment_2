@@ -1,75 +1,145 @@
 import numpy as np
+import random
 from scipy.integrate import odeint
+from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
-
-# Define starting conditions for each population, starting with 3 populations and only population 1 has infection
-
-N1 = 100
-S1 = 99
-I1 = N1 - S1
-R1 = 0
-
-N2 = 100
-S2 = 100
-I2 = N2 - S2
-R2 = 0
+import statistics
 
 
-value_matrix = np.array([S1, I1, R1, S2, I2, R2])
+# Define starting conditions
+N1 = 1000
+S1 = 995
+I1 = 5
+R1 = N1-S1-I1
 
-interaction_matrix = np.array([[1, 0.6], [0.01, 1]])
+N2 = 1000
+S2 = 1000
+I2 = 0
+R2 = N2-S2-I2
 
-days = 10
-dt = 0.1
-steps = round(days / dt)
+days = 100
+t = 0.0
+t_old = 0
+time_step = 0.1
+N_populations = 2
+interaction_matrix = np.array([[1, 0.01], [0.01, 1]])
+value_matrix = np.array([[S1, I1, R1], [S2, I2, R2]])
+time = np.arange((t + time_step), (days + time_step), time_step)
 
-# Define values for beta and gamma
-beta = 1.6
-gamma = 0.4
+N_list = [[N1],[N2]]
+S_list = [[S1],[S2]]
+I_list = [[I1],[I2]]
+R_list = [[R1],[R2]]
+t_list = [[t],[t]]
 
-# Define differential equations
-def SIR_equations(y, t, beta, gamma, interaction_matrix):
-    value_matrix = np.array(y.reshape(2,3))
+N_smooth_list = [[N1],[N2]]
+S_smooth_list = [[S1],[S2]]
+I_smooth_list = [[I1],[I2]]
+R_smooth_list = [[R1],[R2]]
+
+mu = 0.01
+beta = [[1.2], [1.2]]
+gamma = [[0.8], [0.8]]
+
+# Defining all events, changes in [S, I, R]
+E1 = [1, 0, 0]     #birth 
+E2 = [-1, 1, 0]    #infection
+E3 = [0, -1, 1]    #recovery
+E4 = [-1, 0, 0]    #deathS
+E5 = [0, -1, 0]    #deathI
+E6 = [0, 0 , -1]   #deathR
+
+e_list = [E1, E2, E3, E4, E5, E6]
+#e_list = [E2, E3]
+
+for interval in time:
+    #find the most recent numbers and calculate N's of every population
+    
+    value_matrix = np.array([[S_smooth_list[0][-1], I_smooth_list[0][-1], R_smooth_list[0][-1]], [S_smooth_list[1][-1], I_smooth_list[1][-1], R_smooth_list[1][-1]]])
     N_vector = value_matrix @ np.array([[1], [1], [1]])
+    
+    #calculate beta/N
     beta_N = beta / N_vector
     first_matrix = np.identity(2) * beta_N
     infecteds = np.array([value_matrix[:,1]]).T
-    susceptebles = np.array([value_matrix[:,0]]).T  
+    susceptebles = np.array([value_matrix[:,0]]).T
+    recoverds = np.array([value_matrix[:,2]]).T 
     
+    #calculate lambdas
     lapda = first_matrix @ (interaction_matrix @ infecteds)
 
-    dS = - lapda * susceptebles   
-    dI = lapda * susceptebles - gamma * infecteds
-    dR = gamma * infecteds
-
+    #Event rates are calculated for all populations
+    r_b = mu * N_vector.T[0]
+    r_i = (lapda * susceptebles).T[0]
+    r_r = (gamma * infecteds).T[0]
+    r_ds = mu * susceptebles.T[0]
+    r_di = mu * infecteds.T[0]
+    r_dr = mu * recoverds.T[0]
+    r_list = np.array([r_b, r_i, r_r, r_ds, r_di, r_dr]).T
+    r_t = r_list @ np.array([[1], [1], [1], [1], [1], [1]])
     
-    changes = np.array([dS.T[0], dI.T[0], dR.T[0]]).T
-    final_values = changes.reshape(1,6)
+    for pop in range(0,N_populations):
+        #find specific time in that population and numbers
+        t = t_list[pop][-1]
+        S = S_list[pop][-1]
+        I = I_list[pop][-1]
+        R = I_list[pop][-1]
+        r_list_pop = r_list[pop]
+        r_t_pop = r_t[pop]
+        
+        #if the time falls within this interval event happens
+        while interval > t:
+        
+            #calculate the step in time untill next event
+            dt = -(1/r_t_pop) * np.log(random.uniform(0, 1))
+            p = r_t_pop * random.uniform(0, 1)
+            
+            #update the time of the event
+            t += dt
+            p0 = 0
+            i = 0
+            
+            #find the event that happens
+            while p0 < p:
+                p0 += r_list_pop[i]
+                if p0 > p:
+                    break
+                i += 1
+                
+            #find changes in S I and R and recalculate N
+            S += e_list[i][0]
+            I += e_list[i][1]
+            R += e_list[i][2]
+            N = S + I + R
+            
+            S_list[pop].append(S)
+            I_list[pop].append(I)
+            R_list[pop].append(R)
+            N_list[pop].append(N)
+            t_list[pop].append(t)
+        
+        #after new events within the time interval are calculated update the smooth list of that population
+        S_smooth_list[pop].append(S)
+        I_smooth_list[pop].append(I)
+        R_smooth_list[pop].append(R)
+        N_smooth_list[pop].append(N)
 
-    return final_values[0]
-
-
-# Time vector, for the plot
-t = np.linspace(0,days,steps)
-
-start_parameters = value_matrix
-
-# Find solution
-final = odeint(SIR_equations, start_parameters, t, args=(beta, gamma, interaction_matrix))
-
-S1, I1, R1, S2, I2, R2 = final.T
-
-# Plot the distribution
+t = 0.0
+t_old = 0
+time_step = 0.1
+time_plot = np.arange(t, (days + time_step), time_step)
+plt.figure(1)
 plt.title('For β= '+str(beta)+' and γ = '+str(gamma))
-plt.plot(t, I1, label='Infected P1')
-plt.plot(t, I2, label='Infected P2')
-plt.plot(t, S1, label='S P1')
-plt.plot(t, S2, label='S P2')
-plt.plot(t, R1, label='R P1')
-plt.plot(t, R2, label='R P2')
-plt.ylim(0, 100)
-plt.xlim(0, days)
-plt.ylabel('Fraction of people')
+plt.plot(time_plot, S_smooth_list[0], label='S1')
+plt.plot(time_plot, S_smooth_list[1], label='S2')
+plt.plot(time_plot, I_smooth_list[0], label='I1')
+plt.plot(time_plot, I_smooth_list[1], label='I2')
+plt.plot(time_plot, R_smooth_list[0], label='R1')
+plt.plot(time_plot, R_smooth_list[1], label='R2')
+plt.ylim(0, 1200)
+plt.xlim(0, 100)
+plt.ylabel('Amount of people')
 plt.xlabel('Amount of days')
 plt.legend()
 plt.show()
+
