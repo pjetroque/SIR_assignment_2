@@ -17,7 +17,7 @@ S2 = 1000
 I2 = 0
 R2 = N2-S2-I2
 
-days = 100
+days = 50
 t = 0.0
 t_old = 0
 time_step = 0.1
@@ -36,9 +36,9 @@ S_smooth_list = [[S1],[S2]]
 I_smooth_list = [[I1],[I2]]
 R_smooth_list = [[R1],[R2]]
 
-mu = 0.01
+mu = 0.00001
 beta = [[1.2], [1]]
-gamma = [[0.8], [0.8]]
+gamma = [[0.8, 0.8]]
 
 # Defining all events, changes in [S, I, R]
 E1 = [1, 0, 0]     #birth 
@@ -49,10 +49,10 @@ E5 = [0, -1, 0]    #deathI
 E6 = [0, 0 , -1]   #deathR
 
 #e_list = [E1, E2, E3, E4, E5, E6]
-e_list = [E2, E3]
+e_list = [E1, E2, E3]
 
 for interval in time:
-    #find the most recent numbers and calculate N's of every population
+    #find the most recent values and calculate N's of every population
     
     value_matrix = np.array([[S_smooth_list[0][-1], I_smooth_list[0][-1], R_smooth_list[0][-1]], [S_smooth_list[1][-1], I_smooth_list[1][-1], R_smooth_list[1][-1]]])
     N_vector = value_matrix @ np.array([[1], [1], [1]])
@@ -61,33 +61,34 @@ for interval in time:
     beta_N = beta / N_vector
     first_matrix = np.identity(2) * beta_N
     infecteds = np.array([value_matrix[:,1]]).T
-    susceptebles = np.array([value_matrix[:,0]]).T
-    recoverds = np.array([value_matrix[:,2]]).T 
+    susceptebles = np.array([value_matrix[:,0]])
+    recoverds = np.array([value_matrix[:,2]])
     
     #calculate lambdas
-    lapda = first_matrix @ (interaction_matrix @ infecteds)
+    lapda = (first_matrix @ (interaction_matrix @ infecteds)).T
 
     #Event rates are calculated for all populations
-#    r_b = mu * N_vector.T[0]
-    r_i = (lapda * susceptebles).T[0]
-    r_r = (gamma * infecteds).T[0]
+    r_b = mu * N_vector.T[0]
+    r_i = (lapda * susceptebles)[0]
+    r_r = (gamma * infecteds.T)[0]
 #    r_ds = mu * mu * susceptebles.T[0]
 #    r_di = mu * mu * infecteds.T[0]
 #    r_dr = mu * mu * recoverds.T[0]
-    r_list = np.array([r_i, r_r]).T
-    r_t = r_list @ np.array([[1], [1]])
+    r_list = np.array([r_b, r_i, r_r]).T
+    r_t = r_list @ np.array([[1], [1], [1]])
 #    r_list = np.array([r_b, r_i, r_r, r_ds, r_di, r_dr]).T
 #    r_t = r_list @ np.array([[1], [1], [1], [1], [1], [1]])
-    
+    if max(r_t) == 0:
+        break
     
     for pop in range(0,N_populations):
-        #find specific time in that population and numbers
+        #find specific time in that population and values
         t = t_list[pop][-1]
         S = S_list[pop][-1]
         I = I_list[pop][-1]
         R = R_list[pop][-1]
         r_list_pop = r_list[pop]
-        r_t_pop = r_t[pop]
+        r_t_pop = r_t[pop][0]
         
         #if the time falls within this interval event happens
         while interval > t:
@@ -95,6 +96,7 @@ for interval in time:
             #calculate the step in time untill next event
             dt = -(1/r_t_pop) * np.log(random.uniform(0, 1))
             p = r_t_pop * random.uniform(0, 1)
+
             
             #update the time of the event
             t += dt
@@ -120,11 +122,17 @@ for interval in time:
             N_list[pop].append(N)
             t_list[pop].append(t)
         
-        #after new events within the time interval are calculated update the smooth list of that population
-        S_smooth_list[pop].append(S)
-        I_smooth_list[pop].append(I)
-        R_smooth_list[pop].append(R)
-        N_smooth_list[pop].append(N)
+        if interval + time_step > t: 
+            #after new events within the time interval are calculated update the smooth list of that population
+            S_smooth_list[pop].append(S)
+            I_smooth_list[pop].append(I)
+            R_smooth_list[pop].append(R)
+            N_smooth_list[pop].append(N)
+        else:
+            S_smooth_list[pop].append(S_list[pop][-2])
+            I_smooth_list[pop].append(I_list[pop][-2])
+            R_smooth_list[pop].append(R_list[pop][-2])
+            N_smooth_list[pop].append(N_list[pop][-2])
 
 t = 0.0
 t_old = 0
@@ -138,9 +146,10 @@ plt.plot(time_plot, I_smooth_list[0], label='I1')
 plt.plot(time_plot, I_smooth_list[1], label='I2')
 plt.plot(time_plot, R_smooth_list[0], label='R1')
 plt.plot(time_plot, R_smooth_list[1], label='R2')
-plt.ylim(0, 1200)
-plt.xlim(0, 100)
+plt.ylim(0, 1100)
+plt.xlim(0, days)
 plt.ylabel('Amount of people')
 plt.xlabel('Amount of days')
 plt.legend()
 plt.show()
+
