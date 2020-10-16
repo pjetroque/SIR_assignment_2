@@ -1,0 +1,165 @@
+# create empty lists
+N_med = []
+S_med = []
+I_med = []
+R_med = []
+
+N_1st = []
+S_1st = []
+I_1st = []
+R_1st = []
+
+N_3rd = []
+S_3rd = []
+I_3rd = []
+R_3rd = []
+
+N_max = []
+S_max = []
+I_max = []
+R_max = []
+
+N_min = []
+S_min = []
+I_min = []
+R_min = []
+
+N_total = []
+S_total = []
+I_total = []
+R_total = []
+
+# set counters to zero
+l = 0
+k = 0
+
+minmax = 0 # plot min and max on graph
+quartiles = 1 # plot 1st and 3rd quartile
+
+# create a list with the values of each run per timevalue
+while l < len(t_final):
+    while k < total_runs:
+        N_total.append(N_final[k][l]) 
+        S_total.append(S_final[k][l])
+        I_total.append(I_final[k][l])
+        R_total.append(R_final[k][l])
+        k += 1
+        
+    # create median lists
+    N_med.append(np.quantile(N_total, 0.5))
+    S_med.append(np.quantile(S_total, 0.5))
+    I_med.append(np.quantile(I_total, 0.5))
+    R_med.append(np.quantile(R_total, 0.5))
+    
+    #create 1st quartile lists
+    N_1st.append(np.quantile(N_total, 0.25))
+    S_1st.append(np.quantile(S_total, 0.25))
+    I_1st.append(np.quantile(I_total, 0.25))
+    R_1st.append(np.quantile(R_total, 0.25))
+                 
+    #calculate 3rd quartile
+    N_3rd.append(np.quantile(N_total, 0.75))
+    S_3rd.append(np.quantile(S_total, 0.75))
+    I_3rd.append(np.quantile(I_total, 0.75))
+    R_3rd.append(np.quantile(R_total, 0.75))
+    
+    #calculate max
+    N_max.append(max(N_total))
+    S_max.append(max(S_total))
+    I_max.append(max(I_total))
+    R_max.append(max(R_total))
+    
+    #calculate min
+    N_min.append(min(N_total))
+    S_min.append(min(S_total))
+    I_min.append(min(I_total))
+    R_min.append(min(R_total))
+    
+    N_total = []
+    S_total = []
+    I_total = []
+    R_total = []
+    
+    # go one timestep further and reset amount of runs
+    l += 1
+    k = 0
+
+    
+    
+# find deterministic equilibria
+def SIR_equations(y, t, beta, gamma):
+    S, I, R, N = y
+    dS = (N * mu1 + S * (-beta * I/N - mu2)) - (epsilon_forfactor * (beta/gamma - 1) / np.sqrt(N)) * S
+    dI = ((beta * S/N - gamma - mu2) * I) + delta_forfactor * ((mu1 + mu2)/2) * (beta/gamma - 1) * np.sqrt(N) + epsilon_forfactor * (beta/gamma - 1) / np.sqrt(N) * S
+    dR = (I * gamma - mu2 * R) 
+    dN = dS + dI + dR
+    return dS, dI, dR, dN
+
+
+# Find solution
+final_ODE = odeint(SIR_equations, [S0, I0, R0, N0], t_final, args=(beta, gamma))
+S, I, R, N = np.transpose(final_ODE)    
+
+# plot median with shaded 1st and 3rd quartiles
+plt.figure(1)
+plt.title('Averages for β= '+str(beta)+' and γ = '+str(gamma))
+
+
+# plot sotchastic results
+plt.plot(t_final, N_med, label='Total', color = 'black')
+plt.plot(t_final, S_med, label='Susceptible', color = 'blue')
+plt.plot(t_final, I_med, label='Infected', color = 'red')
+plt.plot(t_final, R_med, label='Resistant', color = 'green')
+
+# plot determinstic results
+plt.plot(t_final, S, '--', color = 'blue')
+plt.plot(t_final, I, '--', color = 'red')
+plt.plot(t_final, R, '--', color = 'green')
+plt.plot(t_final, N, '--', color = 'black')
+
+# plot quartitles
+if quartiles == 1:
+    plt.fill_between(t_final, N_1st, N_3rd, color = 'black', alpha = 0.2)
+    plt.fill_between(t_final, R_1st, R_3rd, color = 'green', alpha = 0.2)
+    plt.fill_between(t_final, I_1st, I_3rd, color = 'red', alpha = 0.2)
+    plt.fill_between(t_final, S_1st, S_3rd, color = 'blue', alpha = 0.2)
+
+# plot min and max of simulations
+if minmax == 1:
+    plt.fill_between(t_final, S_min, S_max, color = 'blue', alpha = 0.1)
+    plt.fill_between(t_final, I_min, I_max, color = 'red', alpha = 0.1)
+    plt.fill_between(t_final, R_min, R_max, color = 'green', alpha = 0.1)
+    plt.fill_between(t_final, N_min, N_max, color = 'black', alpha = 0.1)
+
+plt.ylim(0, max(N_max))
+plt.xlim(0, days)
+plt.ylabel('Amount of people')
+plt.xlabel('Amount of days')
+plt.legend()
+plt.show()
+
+
+# plot 
+plt.figure(2)
+plt.title('Infected people for β= '+str(beta)+' and γ = '+str(gamma))
+plt.ylim(0, max(I_max))
+plt.xlim(0, days)
+plt.ylabel('Amount of people')
+plt.xlabel('Amount of days')
+plt.plot(t_final, I_med, label='Infected', color = 'red')
+plt.plot(t_final, I, '--', color = 'red')
+plt.fill_between(t_final, I_1st, I_3rd, color = 'red', alpha = 0.2)
+plt.fill_between(t_final, I_min, I_max, color = 'red', alpha = 0.1)
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
