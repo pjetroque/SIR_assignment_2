@@ -1,0 +1,184 @@
+import numpy as np
+import random
+from scipy.integrate import odeint
+from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
+import statistics
+
+#starting conditions as: lists of S, I and R per population [[pop1], [pop2]]
+#interaction matrix is an n*n matrix with cupling values between meta poppulations rho
+#beta is a list of beta values [b1, b2, b3 ...]
+#gamma is a list of gamma values [g1, g2, g3 ...]
+#mu as a single value mu
+#time_step as a single value of the dt, for instance 0.1
+#days as a single value of the number of days for instance 50
+
+
+def stochastic_metapopulations(starting_conditions, interaction_matrix, beta, gamma, mu, time_step, days):
+    #array of all the times
+    time = np.arange((time_step), (days + time_step), time_step)
+    
+    interaction_matrix = interaction_matrix
+    
+    beta = np.array([beta]).T
+    gamma = np.array([gamma])
+    mu = mu
+    t = 0.0
+    
+    #starting number of populations
+    N_populations = 0
+    
+    #possible events
+    E1 = [1, 0, 0]     #birth 
+    E2 = [-1, 1, 0]    #infection
+    E3 = [0, -1, 1]    #recovery
+    E4 = [-1, 0, 0]    #deathS
+    E5 = [0, -1, 0]    #deathI
+    E6 = [0, 0 , -1]   #deathR
+
+    #e_list = [E1, E2, E3, E4, E5, E6]
+    e_list = [E1, E2, E3]
+    
+    N_list = []
+    S_list = []
+    I_list = []
+    R_list = []
+
+    N_smooth_list = []
+    S_smooth_list = []
+    I_smooth_list = []
+    R_smooth_list = []
+    #get starting conditions of populations
+    for population in starting_conditions:
+        S = population[0]
+        I = population[1]
+        R = population[2]
+        N = S + I + R
+        
+        S_list.append([S])
+        S_smooth_list.append([S])
+        I_list.append([I])
+        I_smooth_list.append([I])
+        R_list.append([R])
+        R_smooth_list.append([R])
+        N_list.append([N])
+        N_smooth_list.append([N])
+        
+        #adding one to the total populations
+        N_populations += 1
+        
+    value_matrix = np.array(starting_conditions)
+    
+    
+    
+    #starting times all zero
+    t_list = N_populations * [[0]]
+
+    
+    for interval in time:
+        #find the most recent values and calculate N's of every population
+
+        N_vector = value_matrix @ np.array([[1], [1], [1]])
+
+        #calculate beta/N
+        beta_N = beta / N_vector
+        first_matrix = np.identity(N_populations) * beta_N
+        infecteds = np.array([value_matrix[:,1]]).T
+        susceptebles = np.array([value_matrix[:,0]])
+        recoverds = np.array([value_matrix[:,2]])
+
+        #calculate lambdas
+        lapda = (first_matrix @ (interaction_matrix @ infecteds)).T
+
+        #Event rates are calculated for all populations
+        r_b = mu * N_vector.T[0]
+        r_i = (lapda * susceptebles)[0]
+        r_r = (gamma * infecteds.T)[0]
+    #    r_ds = mu * mu * susceptebles.T[0]
+    #    r_di = mu * mu * infecteds.T[0]
+    #    r_dr = mu * mu * recoverds.T[0]
+        r_list = np.array([r_b, r_i, r_r]).T
+        r_t = r_list @ np.array([[1], [1], [1]])
+    #    r_list = np.array([r_b, r_i, r_r, r_ds, r_di, r_dr]).T
+    #    r_t = r_list @ np.array([[1], [1], [1], [1], [1], [1]])
+        if max(r_t) == 0:
+            break
+
+        for pop in range(0,N_populations):
+            #find specific time in that population and values
+            t = interval - time_step
+            S = S_list[pop][-1]
+            I = I_list[pop][-1]
+            R = R_list[pop][-1]
+            N = N_list[pop][-1]
+            r_list_pop = r_list[pop]
+            r_t_pop = r_t[pop][0]
+            lapda_pop = lapda[0][pop]
+
+            #find time of next event
+            dt = -(1/r_t_pop) * np.log(random.uniform(0, 1))
+            t += dt
+
+            #if the time falls within this interval event happens
+            while interval > t:
+
+                #calculate which event happens
+                p = r_t_pop * random.uniform(0, 1)
+
+                #update event parameters
+                p0 = 0
+                i = 0
+
+                #find the event that happens
+                while p0 < p:
+                    p0 += r_list_pop[i]
+                    if p0 > p:
+                        break
+                    i += 1
+
+                #find changes in S I and R and recalculate N
+                S += e_list[i][0]
+                I += e_list[i][1]
+                R += e_list[i][2]
+                N = S + I + R
+
+                S_list[pop].append(S)
+                I_list[pop].append(I)
+                R_list[pop].append(R)
+                N_list[pop].append(N)
+                t_list[pop].append(t)
+
+                #update rate values
+                # if lapda was 0 it will stay 0 so check for that
+                if lapda_pop > 0:
+                    N_old = N_list[pop][-2]
+                    N_new = N
+                    dY = e_list[i][1]
+                    b_N = beta_N[pop]
+                    lapda_new = N_old/N_new * (lapda_pop + (b_N * dY))
+
+                    #update the new r_i value for this lapda
+                    r_i_old = r_list_pop[1]
+                    r_i_new = lapda_new / lapda_pop * r_i_old
+                    r_list_pop[1] = r_i_new
+                    r_t_pop += r_i_new - r_i_old
+                    lapda_pop = lapda_new
+
+                r_r_old = r_list_pop[2]
+                r_r_new = gamma[0][pop] * I
+                r_list_pop[2] = r_r_new
+                r_t_pop += r_r_new - r_r_old
+
+                #see if there is another event in this timeslot
+                dt = -(1/r_t_pop) * np.log(random.uniform(0, 1))
+                t += dt
+
+            #after new events within the time interval are calculated update the smooth list of that population
+            S_smooth_list[pop].append(S)
+            I_smooth_list[pop].append(I)
+            R_smooth_list[pop].append(R)
+            N_smooth_list[pop].append(N)
+            value_matrix[pop] = [S, I, R]
+            
+            
+    return S_smooth_list, I_smooth_list, R_smooth_list
